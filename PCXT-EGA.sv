@@ -17,7 +17,9 @@
 //============================================================================
 
 `ifndef CONF_STR_SYSTEM
-`define CONF_STR_SYSTEM "PCXT-EGA;UART115200:115200;"
+// MiSTer Main identifies PC-XT cores by this internal ID and selects its
+// x86 virtual-IDE transport accordingly.  The RBF filename remains PCXT-EGA.
+`define CONF_STR_SYSTEM "PCXT;UART115200:115200;"
 `endif
 `ifndef ENABLE_OPL2
 `define ENABLE_OPL2 0
@@ -1604,4 +1606,3 @@ module emu
 
 
 endmodule
-
