@@ -63,6 +63,14 @@ module mcl86_eu_core
     output [15:0]       EU_REGISTER_R3, 
     output              EU_PREFIX_LOCK,
     output              EU_FLAG_I,          
+`ifdef PC3086_POST_TRACE
+    output [15:0]       DEBUG_EU_AX,
+    output [15:0]       DEBUG_EU_BX,
+    output [15:0]       DEBUG_EU_CX,
+    output [15:0]       DEBUG_EU_DX,
+    output [12:0]       DEBUG_EU_DATAOUT_UADDR,
+    output [15:0]       DEBUG_EU_DATAOUT_ALU,
+`endif
     
     
     input               BIU_DONE,               // BIU to EU Signals
@@ -147,6 +155,10 @@ reg  [15:0] eu_register_r2;
 reg  [15:0] eu_register_r3;
 reg  [15:0] eu_biu_command;
 reg  [15:0] eu_biu_dataout;
+`ifdef PC3086_POST_TRACE
+reg [12:0] debug_eu_dataout_uaddr;
+reg [15:0] debug_eu_dataout_alu;
+`endif
 reg  [15:0] eu_alu_last_result;
 wire [15:0] adder_out;
 wire [16:0] carry;
@@ -203,6 +215,14 @@ assign EU_BIU_DATAOUT       = eu_biu_dataout;
 assign EU_REGISTER_R3       = eu_register_r3;
 assign EU_FLAG_I            = intr_enable_delayed;
 assign EU_PREFIX_LOCK       = eu_prefix_lock;
+`ifdef PC3086_POST_TRACE
+assign DEBUG_EU_AX           = eu_register_ax;
+assign DEBUG_EU_BX           = eu_register_bx;
+assign DEBUG_EU_CX           = eu_register_cx;
+assign DEBUG_EU_DX           = eu_register_dx;
+assign DEBUG_EU_DATAOUT_UADDR = debug_eu_dataout_uaddr;
+assign DEBUG_EU_DATAOUT_ALU   = debug_eu_dataout_alu;
+`endif
 
 
 // EU ROM opcode decoder
@@ -260,7 +280,7 @@ assign eu_jump_boolean = ( (idiv_opcode=='h1) && (eu_rom_address == 'h0E76) && (
                          ( (idiv_opcode=='h1) && (eu_rom_address == 'h0F02) && ( (eu_register_dx!='h0) || (eu_register_ax[15]!='h0) )) ? 1'b1 :
                          (eu_opcode_jump_cond==4'h0)                               ? 1'b1 : // unconditional jump
                          (eu_opcode_jump_cond==4'h1 && eu_alu_last_result!=16'h0)  ? 1'b1 : 
-                         (eu_opcode_jump_cond==4'h2 && eu_alu_last_result==16'h0)  ? 1'b1 : 
+                         (eu_opcode_jump_cond==4'h2 && eu_alu_last_result==16'h0)  ? 1'b1 :
                                                                                      1'b0 ;
 
 
@@ -401,6 +421,10 @@ begin : EU_MICROSEQUENCER
       eu_register_r3 <= 'h0;
       eu_biu_command <= 'h0;
       eu_biu_dataout <= 'h0;
+`ifdef PC3086_POST_TRACE
+      debug_eu_dataout_uaddr <= 'h0;
+      debug_eu_dataout_alu <= 'h0;
+`endif
       eu_stall_pipeline <= 'h0;
       eu_rom_address <= 13'h0020;
       eu_calling_address <= 'h0;
@@ -637,7 +661,13 @@ else
           4'hC : eu_register_r3   <= eu_alu_out[15:0];
           4'hD : eu_biu_command   <= eu_alu_out[15:0];
           //4'hE : ;             
-          4'hF : eu_biu_dataout   <= eu_alu_out[15:0];
+          4'hF : begin
+                   eu_biu_dataout <= eu_alu_out[15:0];
+`ifdef PC3086_POST_TRACE
+                   debug_eu_dataout_uaddr <= eu_rom_address;
+                   debug_eu_dataout_alu <= eu_alu_out[15:0];
+`endif
+                 end
           default :  ;
         endcase
     end

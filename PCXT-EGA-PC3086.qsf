@@ -1,0 +1,23 @@
+# Functional PC3086 compatibility revision.
+#
+# This keeps normal guest video and enables only the PC3086 CMOS index/data
+# port map required by the system ROM.  It deliberately does not enable the
+# POST trace overlay or any trace-only CPU stop logic.
+set_global_assignment -name TOP_LEVEL_ENTITY sys_top
+source PCXT-EGA.qsf
+
+# Keep compilation within the proven host-safe worker limit.
+set_global_assignment -name NUM_PARALLEL_PROCESSORS 4
+
+# The PC3086 BIOS accesses its CMOS as ports 70h (index) and 71h (data).
+# These two ports are otherwise part of the historical 8255 60h..7Fh alias.
+set_global_assignment -name VERILOG_MACRO "PC3086_LEGACY_RTC=1"
+# The PC3086 ROM treats a cleared disk-change line as a failed floppy-ready
+# check between its boot-sector and root-directory reads. Keep it asserted for
+# this compatibility revision; generic revisions retain normal 765 behaviour.
+set_global_assignment -name VERILOG_MACRO "PC3086_KEEP_DISK_CHANGE=1"
+# The PC3086 ROS expects a board-preprogrammed 8255-compatible block:
+# Port A input, Port B output, and Port C input.  It also owns Status-1 and
+# Status-2 write registers at 64h/65h, rather than the generic 60h..7Fh PPI
+# alias used by the normal core.
+set_global_assignment -name VERILOG_MACRO "PC3086_LEGACY_PPI=1"

@@ -164,6 +164,49 @@ module CHIPSET #(
         input   logic   [2:0]   crt_v_offset,
         input   logic   [2:0]   vsync_width_osd,
         input   logic   [2:0]   hsync_width_osd
+`ifdef PC3086_POST_TRACE
+        ,output  logic   [7:0]   debug_keyboard_scancode
+        ,output  logic           debug_keyboard_irq
+        ,output  logic           debug_keyboard_enabled
+        ,output  logic   [7:0]   debug_keyboard_port_a
+        ,output  logic   [7:0]   debug_keyboard_ppi_data
+        ,output  logic   [7:0]   debug_tail_write_cpu_low
+        ,output  logic   [7:0]   debug_tail_write_cpu_high
+        ,output  logic   [7:0]   debug_tail_write_sdram_low
+        ,output  logic   [7:0]   debug_tail_write_sdram_high
+        ,output  logic   [7:0]   debug_tail_write_queue_cpu_low
+        ,output  logic   [7:0]   debug_tail_write_queue_cpu_high
+        ,output  logic   [7:0]   debug_tail_write_queue_sdram_low
+        ,output  logic   [7:0]   debug_tail_write_queue_sdram_high
+        ,output  logic   [1:0]   debug_tail_write_cpu_valid
+        ,output  logic   [1:0]   debug_tail_write_sdram_valid
+        ,output  logic   [1:0]   debug_tail_write_queue_cpu_valid
+        ,output  logic   [1:0]   debug_tail_write_queue_sdram_valid
+        ,output  logic   [3:0]   debug_tail_write_cpu_low_count
+        ,output  logic   [3:0]   debug_tail_write_cpu_high_count
+        ,output  logic   [3:0]   debug_tail_write_queue_cpu_low_count
+        ,output  logic   [3:0]   debug_tail_write_queue_cpu_high_count
+        ,output  logic   [3:0]   debug_tail_write_sdram_low_count
+        ,output  logic   [3:0]   debug_tail_write_sdram_high_count
+        ,output  logic   [3:0]   debug_tail_write_queue_sdram_low_count
+        ,output  logic   [3:0]   debug_tail_write_queue_sdram_high_count
+        ,output  logic   [31:0]  debug_boot_sector_sdram_data
+        ,output  logic   [3:0]   debug_boot_sector_sdram_valid
+        ,output  logic   [31:0]  debug_root_dir_sdram_data
+        ,output  logic   [3:0]   debug_root_dir_sdram_valid
+        ,output  logic   [1:0]   debug_fdd_present
+        ,output  logic           debug_fdd_wp
+        ,output  logic   [7:0]   debug_fdd_cylinders
+        ,output  logic   [7:0]   debug_fdd_sectors_per_track
+        ,output  logic   [15:0]  debug_fdd_sector_count
+        ,output  logic   [1:0]   debug_fdd_heads
+        ,output  logic           debug_fdd_irq
+        ,output  logic           debug_fdd_dma_req
+        ,output  logic           debug_fdd_dma_ack
+        ,output  logic           debug_fdd_dma_strobe
+        ,output  logic           debug_fdd_dma_tc
+        ,output  logic   [7:0]   debug_fdd_dma_data
+`endif
 
     );
 
@@ -428,6 +471,25 @@ module CHIPSET #(
         .crt_v_offset                       (crt_v_offset),
         .vsync_width_osd                    (vsync_width_osd),
         .hsync_width_osd                    (hsync_width_osd)
+`ifdef PC3086_POST_TRACE
+        ,.debug_keyboard_scancode            (debug_keyboard_scancode)
+        ,.debug_keyboard_irq                 (debug_keyboard_irq)
+        ,.debug_keyboard_enabled             (debug_keyboard_enabled)
+        ,.debug_keyboard_port_a              (debug_keyboard_port_a)
+        ,.debug_keyboard_ppi_data            (debug_keyboard_ppi_data)
+        ,.debug_fdd_present                   (debug_fdd_present)
+        ,.debug_fdd_wp                        (debug_fdd_wp)
+        ,.debug_fdd_cylinders                 (debug_fdd_cylinders)
+        ,.debug_fdd_sectors_per_track         (debug_fdd_sectors_per_track)
+        ,.debug_fdd_sector_count              (debug_fdd_sector_count)
+        ,.debug_fdd_heads                     (debug_fdd_heads)
+        ,.debug_fdd_irq                       (debug_fdd_irq)
+        ,.debug_fdd_dma_req                   (debug_fdd_dma_req)
+        ,.debug_fdd_dma_ack                   (debug_fdd_dma_ack)
+        ,.debug_fdd_dma_strobe                (debug_fdd_dma_strobe)
+        ,.debug_fdd_dma_tc                    (debug_fdd_dma_tc)
+        ,.debug_fdd_dma_data                  (debug_fdd_dma_data)
+`endif
     );
 
     RAM u_RAM 
@@ -466,6 +528,32 @@ module CHIPSET #(
         .wait_count_clk_en                  (wait_count_clk_en),
         .ram_read_wait_cycle                (ram_read_wait_cycle),
         .ram_write_wait_cycle               (ram_write_wait_cycle)
+`ifdef PC3086_POST_TRACE
+        ,.debug_tail_write_cpu_low           (debug_tail_write_cpu_low)
+        ,.debug_tail_write_cpu_high          (debug_tail_write_cpu_high)
+        ,.debug_tail_write_sdram_low         (debug_tail_write_sdram_low)
+        ,.debug_tail_write_sdram_high        (debug_tail_write_sdram_high)
+        ,.debug_tail_write_queue_cpu_low     (debug_tail_write_queue_cpu_low)
+        ,.debug_tail_write_queue_cpu_high    (debug_tail_write_queue_cpu_high)
+        ,.debug_tail_write_queue_sdram_low   (debug_tail_write_queue_sdram_low)
+        ,.debug_tail_write_queue_sdram_high  (debug_tail_write_queue_sdram_high)
+        ,.debug_tail_write_cpu_valid         (debug_tail_write_cpu_valid)
+        ,.debug_tail_write_sdram_valid       (debug_tail_write_sdram_valid)
+        ,.debug_tail_write_queue_cpu_valid   (debug_tail_write_queue_cpu_valid)
+        ,.debug_tail_write_queue_sdram_valid (debug_tail_write_queue_sdram_valid)
+        ,.debug_tail_write_cpu_low_count     (debug_tail_write_cpu_low_count)
+        ,.debug_tail_write_cpu_high_count    (debug_tail_write_cpu_high_count)
+        ,.debug_tail_write_queue_cpu_low_count(debug_tail_write_queue_cpu_low_count)
+        ,.debug_tail_write_queue_cpu_high_count(debug_tail_write_queue_cpu_high_count)
+        ,.debug_tail_write_sdram_low_count   (debug_tail_write_sdram_low_count)
+        ,.debug_tail_write_sdram_high_count  (debug_tail_write_sdram_high_count)
+        ,.debug_tail_write_queue_sdram_low_count(debug_tail_write_queue_sdram_low_count)
+        ,.debug_tail_write_queue_sdram_high_count(debug_tail_write_queue_sdram_high_count)
+        ,.debug_boot_sector_sdram_data        (debug_boot_sector_sdram_data)
+        ,.debug_boot_sector_sdram_valid       (debug_boot_sector_sdram_valid)
+        ,.debug_root_dir_sdram_data           (debug_root_dir_sdram_data)
+        ,.debug_root_dir_sdram_valid          (debug_root_dir_sdram_valid)
+`endif
     );
 
     assign  data_bus = internal_data_bus;
@@ -498,4 +586,3 @@ module CHIPSET #(
     end
 
 endmodule
-

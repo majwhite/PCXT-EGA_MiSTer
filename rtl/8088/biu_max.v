@@ -92,6 +92,22 @@ module biu_max
     input  [7:0]        clock_cycle_counter_division_ratio,
     input  [7:0]        clock_cycle_counter_decrement_value,
     input               shift_read_timing
+`ifdef PC3086_POST_TRACE
+    ,input [12:0]       DEBUG_EU_DATAOUT_UADDR
+    ,input [15:0]       DEBUG_EU_DATAOUT_ALU
+    ,input [15:0]       DEBUG_EU_AX
+    ,input [15:0]       DEBUG_EU_BX
+    ,output [15:0]      DEBUG_DATA_OUT_LATCH
+    ,output [7:0]       DEBUG_STATE
+    ,output [19:0]      DEBUG_WRITE_ADDRESS
+    ,output [7:0]       DEBUG_WRITE_CODE
+    ,output [15:0]      DEBUG_WRITE_REQUEST_DATA
+    ,output [15:0]      DEBUG_WRITE_T1_DATA
+    ,output [12:0]      DEBUG_WRITE_EU_UADDR
+    ,output [15:0]      DEBUG_WRITE_EU_ALU
+    ,output [15:0]      DEBUG_WRITE_EU_AX
+    ,output [15:0]      DEBUG_WRITE_EU_BX
+`endif
 
   );
 
@@ -129,7 +145,30 @@ wire  pfq_full;
 reg  [7:0]  ad_in_int;
 reg  [19:0] addr_out_temp_base;
 reg  [15:0] addr_out_temp_offset;
+// The EU presents write data after requesting the BIU and can subsequently
+// advance before T2/T3. Capture it as the BIU launches the bus cycle.
+reg  [15:0] data_out_temp;
 reg  [7:0]  biu_state;
+`ifdef PC3086_POST_TRACE
+reg [19:0] debug_write_address;
+reg [7:0]  debug_write_code;
+reg [15:0] debug_write_request_data;
+reg [15:0] debug_write_t1_data;
+reg [12:0] debug_write_eu_uaddr;
+reg [15:0] debug_write_eu_alu;
+reg [15:0] debug_write_eu_ax;
+reg [15:0] debug_write_eu_bx;
+assign DEBUG_DATA_OUT_LATCH = data_out_temp;
+assign DEBUG_STATE = biu_state;
+assign DEBUG_WRITE_ADDRESS = debug_write_address;
+assign DEBUG_WRITE_CODE = debug_write_code;
+assign DEBUG_WRITE_REQUEST_DATA = debug_write_request_data;
+assign DEBUG_WRITE_T1_DATA = debug_write_t1_data;
+assign DEBUG_WRITE_EU_UADDR = debug_write_eu_uaddr;
+assign DEBUG_WRITE_EU_ALU = debug_write_eu_alu;
+assign DEBUG_WRITE_EU_AX = debug_write_eu_ax;
+assign DEBUG_WRITE_EU_BX = debug_write_eu_bx;
+`endif
 reg  [15:0] biu_register_cs;
 reg  [15:0] biu_register_es;
 reg  [15:0] biu_register_ss;
@@ -293,6 +332,17 @@ begin : BIU_STATE_MACHINE
       latched_data_in <= 'h0;
       addr_out_temp_base <= 'h0;
       addr_out_temp_offset <= 'h0;
+      data_out_temp <= 'h0;
+`ifdef PC3086_POST_TRACE
+      debug_write_address <= 'h0;
+      debug_write_code <= 'h0;
+      debug_write_request_data <= 'h0;
+      debug_write_t1_data <= 'h0;
+      debug_write_eu_uaddr <= 'h0;
+      debug_write_eu_alu <= 'h0;
+      debug_write_eu_ax <= 'h0;
+      debug_write_eu_bx <= 'h0;
+`endif
       s_bits <= 3'b111;
       AD_OUT <= 'h0;
       word_cycle <= 1'b0;
@@ -501,6 +551,19 @@ else
 
                 if (eu_biu_req_caught==1'b1)
                   begin                 
+`ifdef PC3086_POST_TRACE
+                    if (eu_biu_req_code == 8'h0E || eu_biu_req_code == 8'h13 ||
+                        eu_biu_req_code == 8'h14) begin
+                      debug_write_code <= eu_biu_req_code;
+                      debug_write_request_data <= EU_BIU_DATAOUT;
+                      debug_write_address <= (eu_biu_req_code == 8'h14) ?
+                        ({biu_register_ss,4'h0} + eu_register_r3_d) :
+                        ({biu_muxed_segment,4'h0} + eu_register_r3_d);
+                    end
+`endif
+                    // The EU command is visible before its write operand.
+                    // For write cycles the operand is sampled in state 02,
+                    // immediately before T2, rather than here in state 00.
                         
                     case (eu_biu_req_code)  // synthesis parallel_case
                                         
@@ -667,6 +730,27 @@ else
               end
         
       8'h02 : begin
+                // The EU supplies write data one internal cycle after the
+                // request/command.  Capture it at the end of T1, before the
+                // T2 data phase begins.  Sampling it in state 00 retained
+                // the preceding BDA-tail value (001E) for the next write.
+                if (s_bits[1])
+                  begin
+                    data_out_temp <= EU_BIU_DATAOUT;
+`ifdef PC3086_POST_TRACE
+                    // Sample all EU context at the same T1 point that feeds
+                    // the AD bus. This ties it to this write, not a later
+                    // external RAM observation.
+                    if (s_bits == 3'b110) begin
+                      debug_write_request_data <= EU_BIU_DATAOUT;
+                      debug_write_t1_data <= EU_BIU_DATAOUT;
+                      debug_write_eu_uaddr <= DEBUG_EU_DATAOUT_UADDR;
+                      debug_write_eu_alu <= DEBUG_EU_DATAOUT_ALU;
+                      debug_write_eu_ax <= DEBUG_EU_AX;
+                      debug_write_eu_bx <= DEBUG_EU_BX;
+                    end
+`endif
+                  end
                 if (~clk_negedge) // Wait until next CLK falling edge
                     biu_state <= 8'h02;
               end
@@ -691,11 +775,11 @@ else
                       
                     if (word_cycle==1'b1 && byte_num==1'b1)
                       begin
-                        AD_OUT[7:0] <= EU_BIU_DATAOUT[15:8];
+                        AD_OUT[7:0] <= data_out_temp[15:8];
                       end
                     else
                       begin
-                        AD_OUT[7:0] <= EU_BIU_DATAOUT[7:0];
+                        AD_OUT[7:0] <= data_out_temp[7:0];
                       end
                   end
                 else

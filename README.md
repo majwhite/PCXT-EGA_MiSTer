@@ -167,8 +167,10 @@ example, or running EGA-only software with nothing else in the picture.
 * Press Win + F12 on your keyboard.
   * Model: IBM PCXT.
   * CPU Speed: pick a speed.
-  * FDD & HDD → HDD Image: FreeDOS_HD.img
-  * BIOS → PCXT BIOS: choose a compatible system BIOS, such as `bios-micro8088-xtide.rom` from `SW/8088_bios/binaries/`.
+  * IDE 0-0: `Freedos_HD.vhd`
+  * System & BIOS → PCXT BIOS: `bios-micro8088-noide.rom`.
+  * System & BIOS → EC00 BIOS: `ide_xt-cf-lite_300h.bin`.
+  * Hardware → 2nd SD card: `Disable`.
 * Choose Reset & apply settings.
 
 ## Known limitations
@@ -222,6 +224,14 @@ Original and copyrighted system ROMs can be prepared with the Python scripts in
 
 The same OSD section accepts an XTIDE ROM of up to 16 KiB at `EC00h`; one is
 included in this repository.
+
+Use `ide_xt-cf-lite_300h.bin` in that EC00 slot with a `-noide` system BIOS.
+The core's virtual IDE is at I/O `300h`. In particular,
+`bios-micro8088-xtide.rom` embeds the `320h` XTIDE build, so it is not a
+compatible shortcut for this core and will report no drive at its configured
+port. Keep *Hardware → 2nd SD card* at *Disable* when mounting a virtual IDE
+master: selecting *IDE 0-0* assigns that position to the physical second SD
+card instead.
 
 Other Open Source ROMs are available in the same folder:
 

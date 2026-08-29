@@ -49,6 +49,36 @@ module RAM (
     input   logic           wait_count_clk_en,
     input   logic   [1:0]   ram_read_wait_cycle,
     input   logic   [1:0]   ram_write_wait_cycle
+`ifdef PC3086_POST_TRACE
+    // PC3086-only RAM-side probe. These are absent from normal revisions.
+    ,output  logic   [7:0]   debug_tail_write_cpu_low
+    ,output  logic   [7:0]   debug_tail_write_cpu_high
+    ,output  logic   [7:0]   debug_tail_write_sdram_low
+    ,output  logic   [7:0]   debug_tail_write_sdram_high
+    ,output  logic   [7:0]   debug_tail_write_queue_cpu_low
+    ,output  logic   [7:0]   debug_tail_write_queue_cpu_high
+    ,output  logic   [7:0]   debug_tail_write_queue_sdram_low
+    ,output  logic   [7:0]   debug_tail_write_queue_sdram_high
+    ,output  logic   [1:0]   debug_tail_write_cpu_valid
+    ,output  logic   [1:0]   debug_tail_write_sdram_valid
+    ,output  logic   [1:0]   debug_tail_write_queue_cpu_valid
+    ,output  logic   [1:0]   debug_tail_write_queue_sdram_valid
+    ,output  logic   [3:0]   debug_tail_write_cpu_low_count
+    ,output  logic   [3:0]   debug_tail_write_cpu_high_count
+    ,output  logic   [3:0]   debug_tail_write_queue_cpu_low_count
+    ,output  logic   [3:0]   debug_tail_write_queue_cpu_high_count
+    ,output  logic   [3:0]   debug_tail_write_sdram_low_count
+    ,output  logic   [3:0]   debug_tail_write_sdram_high_count
+    ,output  logic   [3:0]   debug_tail_write_queue_sdram_low_count
+    ,output  logic   [3:0]   debug_tail_write_queue_sdram_high_count
+    // SDRAM-committed bytes at 0000:7C00, 7C01, 7DFE and 7DFF.
+    ,output  logic   [31:0]  debug_boot_sector_sdram_data
+    ,output  logic   [3:0]   debug_boot_sector_sdram_valid
+    // First root-directory entry bytes at 0000:0500/01/08/09. The expected
+    // MS-DOS 5 system image begins "IO      SYS" (49 4F ... 53 59).
+    ,output  logic   [31:0]  debug_root_dir_sdram_data
+    ,output  logic   [3:0]   debug_root_dir_sdram_valid
+`endif
 );
 
     typedef enum {IDLE, RAM_WRITE_1, RAM_WRITE_2, RAM_READ_1, RAM_READ_2, COMPLETE_RAM_RW, WAIT} state_t;
@@ -163,6 +193,118 @@ module RAM (
     logic           read_flag;
     logic           idle;
     logic           refresh_mode;
+
+`ifdef PC3086_POST_TRACE
+    // Observe the first-key BDA update at both sides of the RAM transaction.
+    // The tail vectors represent 041Ch/d; the queue vectors represent the
+    // first queue word at 041Eh/f. These probes are absent from normal cores.
+    always_ff @(posedge clock, posedge reset) begin
+        if (reset) begin
+            debug_tail_write_cpu_low         <= 8'h00;
+            debug_tail_write_cpu_high        <= 8'h00;
+            debug_tail_write_sdram_low       <= 8'h00;
+            debug_tail_write_sdram_high      <= 8'h00;
+            debug_tail_write_queue_cpu_low   <= 8'h00;
+            debug_tail_write_queue_cpu_high  <= 8'h00;
+            debug_tail_write_queue_sdram_low <= 8'h00;
+            debug_tail_write_queue_sdram_high <= 8'h00;
+            debug_tail_write_cpu_valid       <= 2'b00;
+            debug_tail_write_sdram_valid     <= 2'b00;
+            debug_tail_write_queue_cpu_valid <= 2'b00;
+            debug_tail_write_queue_sdram_valid <= 2'b00;
+            debug_tail_write_cpu_low_count   <= 4'h0;
+            debug_tail_write_cpu_high_count  <= 4'h0;
+            debug_tail_write_queue_cpu_low_count <= 4'h0;
+            debug_tail_write_queue_cpu_high_count <= 4'h0;
+            debug_tail_write_sdram_low_count <= 4'h0;
+            debug_tail_write_sdram_high_count <= 4'h0;
+            debug_tail_write_queue_sdram_low_count <= 4'h0;
+            debug_tail_write_queue_sdram_high_count <= 4'h0;
+            debug_boot_sector_sdram_data <= 32'h00000000;
+            debug_boot_sector_sdram_valid <= 4'b0000;
+            debug_root_dir_sdram_data <= 32'h00000000;
+            debug_root_dir_sdram_valid <= 4'b0000;
+        end else begin
+            // This is the RAM controller's own acceptance edge, independent
+            // of the top-level trace sampler.
+            if (state == IDLE && write_command) begin
+                case (address)
+                    20'h0041C: begin
+                        debug_tail_write_cpu_low <= internal_data_bus;
+                        debug_tail_write_cpu_valid[0] <= 1'b1;
+                        if (!(&debug_tail_write_cpu_low_count))
+                            debug_tail_write_cpu_low_count <= debug_tail_write_cpu_low_count + 1'b1;
+                    end
+                    20'h0041D: begin
+                        debug_tail_write_cpu_high <= internal_data_bus;
+                        debug_tail_write_cpu_valid[1] <= 1'b1;
+                        if (!(&debug_tail_write_cpu_high_count))
+                            debug_tail_write_cpu_high_count <= debug_tail_write_cpu_high_count + 1'b1;
+                    end
+                    20'h0041E: begin
+                        debug_tail_write_queue_cpu_low <= internal_data_bus;
+                        debug_tail_write_queue_cpu_valid[0] <= 1'b1;
+                        if (!(&debug_tail_write_queue_cpu_low_count))
+                            debug_tail_write_queue_cpu_low_count <= debug_tail_write_queue_cpu_low_count + 1'b1;
+                    end
+                    20'h0041F: begin
+                        debug_tail_write_queue_cpu_high <= internal_data_bus;
+                        debug_tail_write_queue_cpu_valid[1] <= 1'b1;
+                        if (!(&debug_tail_write_queue_cpu_high_count))
+                            debug_tail_write_queue_cpu_high_count <= debug_tail_write_queue_cpu_high_count + 1'b1;
+                    end
+                    default: ;
+                endcase
+            end
+            // write_flag is the point at which KFSDRAM issues the write;
+            // access_data_in is consequently the byte actually supplied to it.
+            if (state == RAM_WRITE_1 && write_flag) begin
+                case (latch_address[19:0])
+                    20'h0041C: begin
+                        debug_tail_write_sdram_low <= access_data_in[7:0];
+                        debug_tail_write_sdram_valid[0] <= 1'b1;
+                        if (!(&debug_tail_write_sdram_low_count))
+                            debug_tail_write_sdram_low_count <= debug_tail_write_sdram_low_count + 1'b1;
+                    end
+                    20'h0041D: begin
+                        debug_tail_write_sdram_high <= access_data_in[7:0];
+                        debug_tail_write_sdram_valid[1] <= 1'b1;
+                        if (!(&debug_tail_write_sdram_high_count))
+                            debug_tail_write_sdram_high_count <= debug_tail_write_sdram_high_count + 1'b1;
+                    end
+                    20'h0041E: begin
+                        debug_tail_write_queue_sdram_low <= access_data_in[7:0];
+                        debug_tail_write_queue_sdram_valid[0] <= 1'b1;
+                        if (!(&debug_tail_write_queue_sdram_low_count))
+                            debug_tail_write_queue_sdram_low_count <= debug_tail_write_queue_sdram_low_count + 1'b1;
+                    end
+                    20'h0041F: begin
+                        debug_tail_write_queue_sdram_high <= access_data_in[7:0];
+                        debug_tail_write_queue_sdram_valid[1] <= 1'b1;
+                        if (!(&debug_tail_write_queue_sdram_high_count))
+                            debug_tail_write_queue_sdram_high_count <= debug_tail_write_queue_sdram_high_count + 1'b1;
+                    end
+                    default: ;
+                endcase
+            end
+            // `access_data_in` is the controller's actual SDRAM write byte,
+            // so this covers DMA transfers as well as CPU stores.
+            if (state == RAM_WRITE_1 && write_flag) begin
+                case (latch_address[19:0])
+                    20'h07C00: begin debug_boot_sector_sdram_data[7:0]   <= access_data_in[7:0]; debug_boot_sector_sdram_valid[0] <= 1'b1; end
+                    20'h07C01: begin debug_boot_sector_sdram_data[15:8]  <= access_data_in[7:0]; debug_boot_sector_sdram_valid[1] <= 1'b1; end
+                    20'h07DFE: begin debug_boot_sector_sdram_data[23:16] <= access_data_in[7:0]; debug_boot_sector_sdram_valid[2] <= 1'b1; end
+                    20'h07DFF: begin debug_boot_sector_sdram_data[31:24] <= access_data_in[7:0]; debug_boot_sector_sdram_valid[3] <= 1'b1; end
+                    20'h00500: begin debug_root_dir_sdram_data[7:0]   <= access_data_in[7:0]; debug_root_dir_sdram_valid[0] <= 1'b1; end
+                    20'h00501: begin debug_root_dir_sdram_data[15:8]  <= access_data_in[7:0]; debug_root_dir_sdram_valid[1] <= 1'b1; end
+                    20'h00508: begin debug_root_dir_sdram_data[23:16] <= access_data_in[7:0]; debug_root_dir_sdram_valid[2] <= 1'b1; end
+                    20'h00509: begin debug_root_dir_sdram_data[31:24] <= access_data_in[7:0]; debug_root_dir_sdram_valid[3] <= 1'b1; end
+                    default: ;
+                endcase
+            end
+        end
+    end
+`endif
 
     KFSDRAM u_KFSDRAM (
         .sdram_clock        (clock),

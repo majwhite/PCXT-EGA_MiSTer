@@ -5,7 +5,14 @@
 // Written by Kitune-san
 //
 
-module KF8255 (
+`include "KF8255_Definitions.svh"
+
+module KF8255 #(
+    // The Amstrad PC3086 implements a preprogrammed 8255-compatible block:
+    // mode 0, Port A input, Port B output and Port C input.  Keep the normal
+    // all-input 8255 reset profile as the default for every other machine.
+    parameter logic PC3086_RESET_COMPAT = 1'b0
+) (
     // Bus
     input   logic           clock,
     input   logic           reset,
@@ -79,7 +86,10 @@ module KF8255 (
     logic           group_a_port_a_io_reg;
     logic           group_a_port_c_io_reg;
 
-    KF8255_Group u_Group_A (
+    KF8255_Group #(
+        .RESET_PORT_1_IO       (`PORT_INPUT),
+        .RESET_PORT_2_IO       (`PORT_INPUT)
+    ) u_Group_A (
         // Bus
         .clock                  (clock),
         .reset                  (reset),
@@ -109,7 +119,10 @@ module KF8255 (
     logic           group_b_port_b_io_reg;
     logic           group_b_port_c_io_reg;
 
-    KF8255_Group u_Group_B (
+    KF8255_Group #(
+        .RESET_PORT_1_IO       (PC3086_RESET_COMPAT ? `PORT_OUTPUT : `PORT_INPUT),
+        .RESET_PORT_2_IO       (`PORT_INPUT)
+    ) u_Group_B (
         // Bus
         .clock                  (clock),
         .reset                  (reset),
@@ -132,7 +145,9 @@ module KF8255 (
     logic           port_a_hiz;
     logic   [7:0]   port_a_read_data;
 
-    KF8255_Port u_Port_A (
+    KF8255_Port #(
+        .RESET_PORT_IO         (`PORT_INPUT)
+    ) u_Port_A (
         // Bus
         .clock                  (clock),
         .reset                  (reset),
@@ -163,7 +178,9 @@ module KF8255 (
     logic           port_b_strobe;
     logic   [7:0]   port_b_read_data;
 
-    KF8255_Port u_Port_B (
+    KF8255_Port #(
+        .RESET_PORT_IO         (PC3086_RESET_COMPAT ? `PORT_OUTPUT : `PORT_INPUT)
+    ) u_Port_B (
         // Bus
         .clock                  (clock),
         .reset                  (reset),
