@@ -69,6 +69,8 @@ module biu_ram_prefetch_tb;
     wire        word_write_request;
     wire [15:0] data_bus_word_out;
     wire [15:0] data_bus_word;
+    wire processor_ready;
+    wire ram_address_select_n;
 
     // The CPU side is deliberately a BIU-only harness: the integration being
     // checked is the new private 16-bit read path, not EU microcode.
@@ -104,11 +106,9 @@ module biu_ram_prefetch_tb;
     wire memory_read_n  = ~((status == ST_FETCH) || (status == ST_MEMR));
     wire memory_write_n = ~(status == ST_MEMW);
     wire no_command_state = memory_read_n & memory_write_n;
-    wire processor_ready;
 
     wire        initialized_sdram;
     wire        memory_access_ready;
-    wire        ram_address_select_n;
     wire [7:0]  ram_data_out;
     wire [15:0] ram_data_out_word;
     wire [12:0] sdram_address;

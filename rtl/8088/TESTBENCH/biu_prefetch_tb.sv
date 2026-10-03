@@ -75,6 +75,7 @@ module biu_prefetch_tb;
     wire         WORD_WRITE_REQUEST;
     wire [15:0]  DATA_BUS_WORD_OUT;
     wire [15:0]  DATA_BUS_WORD;
+    wire         WORD_ACCESS_POSSIBLE;
 
     mcl86_biu_max dut (
         .CORE_CLK_INT   (CORE_CLK_INT),
@@ -149,7 +150,7 @@ module biu_prefetch_tb;
     // Mirrors Chipset's SDRAM decode with UMB enabled and no EMS bank mapped.
     // It is deliberately based on the address latched from T1, which is when
     // the real word_read_possible signal becomes valid.
-    wire WORD_ACCESS_POSSIBLE = (bus_addr < 20'hA0000)
+    assign WORD_ACCESS_POSSIBLE = (bus_addr < 20'hA0000)
                               | (bus_addr >= 20'hC0000);
 
     //------------------------------------------------------------------------

@@ -20,6 +20,7 @@ module cpu_8086_speed_tb;
     always #10 ram_clock = ~ram_clock;
 
     wire cpu_clock, cpu_ce_posedge, cpu_ce_negedge;
+    wire biu_done;
     wire cycle_accurate, shift_read_timing;
     wire [7:0] counter_division, counter_decrement;
     wire [1:0] ram_read_wait_cycle, ram_write_wait_cycle;
@@ -38,7 +39,7 @@ module cpu_8086_speed_tb;
     wire [19:0] ad_out;
     wire [7:0] cpu_data_out, ram_data_out;
     wire [2:0] status;
-    wire s6_3_mux, processor_ready, biu_done;
+    wire s6_3_mux, processor_ready;
     wire word_read_request, word_write_request;
     wire [15:0] data_bus_word_out, data_bus_word;
     wire ram_address_select_n;

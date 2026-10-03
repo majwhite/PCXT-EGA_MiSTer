@@ -67,6 +67,8 @@ module ram_lookahead_tb;
     logic [15:0] sdram_dq_in;
     logic [6:0]  map_ems [0:3];
 
+    logic [1:0] clk_select = 2'b11;
+
     RAM dut (
         .clock                 (clock),
         .reset                 (reset),
@@ -445,7 +447,6 @@ module ram_lookahead_tb;
     integer sweep_reads;
     integer sweep_bytes;
     integer slow_reads;
-    logic [1:0] clk_select = 2'b11;
 
     initial begin
         for (i = 0; i < MEM_WORDS; i = i + 1)
