@@ -1,0 +1,8 @@
+# Functional PC3086 revision using the current shared project/source lists.
+source PCXT-EGA.qsf
+
+# The legacy Quartus toolchain has previously exhausted this build host.
+set_global_assignment -name NUM_PARALLEL_PROCESSORS 1
+set_global_assignment -name VERILOG_MACRO "PC3086_LEGACY_RTC=1"
+set_global_assignment -name VERILOG_MACRO "PC3086_LEGACY_PPI=1"
+set_global_assignment -name VERILOG_MACRO "PC3086_KEEP_DISK_CHANGE=1"
