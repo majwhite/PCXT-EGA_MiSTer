@@ -74,10 +74,33 @@ the upstream CPU suite separately exercises the 8086 path.
 
 ## FPGA validation
 
-The first one-worker build is in progress. Mapping completed successfully;
-fitting, STA and assembler must finish before the RBF is considered usable.
+The one-worker map/merge/fit/STA/assembler run completed with exit 0. The
+fitter, timing-analyzer and assembler reports all confirm stage completion.
+The fresh bitstream is:
 
-After a fresh verified RBF is available:
+```text
+output_files/PCXT-EGA-PC3086.rbf
+mtime: 2026-10-04 10:11:25 +1100
+size:  4,047,532 bytes
+SHA256: 0a41fdc1087434ccc74d418f5e42bb655cb843955532cb48489dd920fea100be
+```
+
+**Experimental only: timing is not closed.** TimeQuest reports worst-case setup
+slack -27.851 ns, hold slack -0.431 ns and recovery slack -5.703 ns, plus
+incomplete setup/hold constraints. Stage completion does not imply meeting
+hardware timing. The worst setup group is the video PLL's general[0] output;
+the main core clock also has negative setup slack. Quartus additionally reports
+mixed-clock EGA RAM read-during-write warnings. These are not yet classified as
+pre-existing versus port-induced: unlike the video simulation exceptions, no
+vanilla-upstream FPGA build was run for comparison.
+
+The next engineering gate is to inspect detailed failing paths and compare a
+vanilla upstream build with the same toolchain. Distinguish real critical paths
+from justified CDC/clock-exclusivity constraints; do not hide violations with
+blanket false paths. Retain this RBF as an experimental artifact, not a validated
+replacement for the old hardware-tested core.
+
+Once the timing/constraint issues have been reviewed, hardware follow-up is:
 
 1. Select IBM PCXT / 8088, load the mirrored PC3086 system ROM and a known-good
    EGA option ROM, and begin with normal XT speed.
