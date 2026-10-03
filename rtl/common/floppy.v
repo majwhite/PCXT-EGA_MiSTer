@@ -263,6 +263,9 @@ always @(posedge clk) begin
 	if(~rst_n | sw_reset)          in_seek_mode <= 4'b0000;
 	else if(cmd_recalibrate_start) in_seek_mode <= 4'b0001 << io_writedata[0];
 	else if(cmd_seek_start)        in_seek_mode <= 4'b0001 << command[0];
+	// The 765's per-drive busy/seek indication ends with the completion
+	// interrupt for a SEEK or RECALIBRATE command.
+	else if(delay_last_cycle) in_seek_mode <= in_seek_mode & ~(4'b0001 << selected_drive[0]);
 end
 
 //------------------------------------------------------------------------------
@@ -374,12 +377,20 @@ wire raise_interrupt = dma_irq_enable && (
 	cmd_read_id_finished
 );
 
+// The PC3086 BIOS polls disk-change between its boot-sector and root-directory
+// reads.  It interprets a cleared indication as a floppy-ready failure, so its
+// compatibility configuration deliberately retains the indication.  Other
+// configurations preserve the normal controller behaviour below.
 wire reset_changeline =
+`ifdef PC3086_KEEP_DISK_CHANGE
+	1'b0;
+`else
 	(cmd_read_write_ok_at_start) ||
 	(state == S_UPDATE_SECTOR && increment_cylinder) ||
 	(cmd_recalibrate_start && cylinder[selected_drive[0]] != 8'd0) ||
 	(cmd_seek_start && cylinder[selected_drive[0]] != io_writedata) ||
 	(old_motor_enable[selected_drive[0]] & ~motor_enable[selected_drive[0]]); // on-off-on trick to clear the change status in win98
+`endif
 
 
 //------------------------------------------------------------------------------ cmd: read / write
@@ -640,7 +651,7 @@ always @(posedge clk) begin
 	else if(cmd_read_write_start && cmd_read_write_incorrect_sector_at_start) reply <= { 24'd0, 8'd2, command[31:24],            7'b0,command[32],             command[47:40],              8'h00, 8'h04, (8'h40 | { 5'd0, command[32],              selected_drive }) };
 	else if(cmd_write_normal_start && cmd_write_and_writeprotected_at_start)  reply <= { 24'd0, 8'd2, command[31:24],            7'b0,command[32],             command[47:40],              8'h31, 8'h27, (8'h40 | { 5'd0, command[32],              selected_drive }) };
 	else if(cmd_format_track_start && cmd_format_writeprotected_at_start)     reply <= { 24'd0, 8'd2, sector[selected_drive[0]], 7'b0,command[26],             cylinder[selected_drive[0]], 8'h31, 8'h27, (8'h40 | { 5'd0, command[26],              selected_drive }) };
-	else if(state == S_CHECK_TC && cmd_read_write_finish)                     reply <= { 24'd0, 8'd2, sector[selected_drive[0]], 7'b0,head[selected_drive[0]], cylinder[selected_drive[0]], 8'h00, 8'h00, (8'h00 | { 5'd0, head[selected_drive[0]],  selected_drive }) };
+	else if(state == S_CHECK_TC && cmd_read_write_finish)                     reply <= { 24'd0, 8'd2, result_sector, 7'b0,result_head, result_cylinder, 8'h00, 8'h00, (8'h00 | { 5'd0, result_head, selected_drive }) };
 	else if(state == S_CHECK_TC && cmd_format_finish)                         reply <= { 24'd0, 8'd2, sector[selected_drive[0]], 7'b0,head[selected_drive[0]], cylinder[selected_drive[0]], 8'h00, 8'h00, (8'h00 | { 5'd0, head[selected_drive[0]],  selected_drive }) };
 	else if(state == S_WAIT_FOR_FORMAT_INPUT && cmd_format_in_input_finish)   reply <= { 24'd0, 8'd2, sector[selected_drive[0]], 7'b0,head[selected_drive[0]], cylinder[selected_drive[0]], 8'h00, 8'h00, (8'h40 | { 5'd0, head[selected_drive[0]],  selected_drive }) };
 	else if(cmd_read_id_finished)                                             reply <= { 24'd0, 8'd2, sector[selected_drive[0]], 7'b0,head[selected_drive[0]], cylinder[selected_drive[0]], 8'h00, 8'h00, (8'h00 | { 5'd0, head[selected_drive[0]],  selected_drive }) };
@@ -795,6 +806,24 @@ always @(posedge clk) begin
 	else if(state == S_UPDATE_SECTOR && increment_only_sector)                                                           sector[selected_drive[0]] <= sector[selected_drive[0]] + 8'd1;
 	else if(state == S_UPDATE_SECTOR && ~increment_only_sector)                                                          sector[selected_drive[0]] <= 8'd1;
 	else if(state == S_WAIT_FOR_FORMAT_INPUT && format_data_count == 3'd4)                                               sector[selected_drive[0]] <= format_data[15:8];
+end
+
+// READ/WRITE result bytes report the sector just transferred. The live CHRN
+// advances in S_UPDATE_SECTOR before S_CHECK_TC creates the result packet.
+reg [7:0] result_cylinder;
+reg       result_head;
+reg [7:0] result_sector;
+always @(posedge clk) begin
+	if(~rst_n | sw_reset) begin
+		result_cylinder <= 8'd0;
+		result_head     <= 1'b0;
+		result_sector   <= 8'd1;
+	end
+	else if(state == S_UPDATE_SECTOR) begin
+		result_cylinder <= cylinder[selected_drive[0]];
+		result_head     <= head[selected_drive[0]];
+		result_sector   <= sector[selected_drive[0]];
+	end
 end
 
 (* ramstyle = "logic" *) reg [7:0] eot[2];
