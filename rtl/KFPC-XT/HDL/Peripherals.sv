@@ -23,6 +23,38 @@
 `define ENABLE_SB 0
 `endif
 
+// PC3086 system ports must not alias the generic 60h..7Fh PPI window.
+// Keep the historical low-byte aliasing for ordinary PCXT builds.
+module PC3086_IO_DECODE (
+    input  logic [19:0] address,
+    input  logic        iorq,
+    input  logic        address_enable_n,
+    output logic        ppi_60_7f_select,
+    output logic        pc3086_rtc_select,
+    output logic        pc3086_status1_write_select,
+    output logic        pc3086_status2_write_select
+);
+    wire legacy_ppi_window = iorq && ~address_enable_n &&
+                             address[7:5] == 3'b011;
+`ifdef PC3086_LEGACY_PPI
+    wire pc3086_system_port = iorq && ~address_enable_n &&
+                              address[15:8] == 8'h00;
+    assign ppi_60_7f_select = pc3086_system_port && address[7:2] == 6'h18;
+    assign pc3086_status1_write_select = pc3086_system_port && address[7:0] == 8'h64;
+    assign pc3086_status2_write_select = pc3086_system_port && address[7:0] == 8'h65;
+`else
+    assign ppi_60_7f_select = legacy_ppi_window && ~pc3086_rtc_select;
+    assign pc3086_status1_write_select = 1'b0;
+    assign pc3086_status2_write_select = 1'b0;
+`endif
+`ifdef PC3086_LEGACY_RTC
+    assign pc3086_rtc_select = iorq && ~address_enable_n &&
+                               address[15:1] == (16'h0070 >> 1);
+`else
+    assign pc3086_rtc_select = 1'b0;
+`endif
+endmodule
+
 module PERIPHERALS #(
         parameter ps2_over_time = 16'd1000,
 		parameter clk_rate = 28'd50000000
@@ -299,7 +331,18 @@ module PERIPHERALS #(
     assign  dma_chip_select_n       = chip_select_n[0]; // 0x00 .. 0x1F
     wire    interrupt_chip_select_n = chip_select_n[1]; // 0x20 .. 0x3F
     wire    timer_chip_select_n     = chip_select_n[2]; // 0x40 .. 0x5F
-    wire    ppi_chip_select_n       = chip_select_n[3]; // 0x60 .. 0x7F
+    wire    ppi_60_7f_select;
+    wire    pc3086_rtc_chip_select;
+    wire    pc3086_status1_write_select;
+    wire    pc3086_status2_write_select;
+    PC3086_IO_DECODE u_pc3086_io_decode (
+        .address(address), .iorq(iorq), .address_enable_n(address_enable_n),
+        .ppi_60_7f_select(ppi_60_7f_select),
+        .pc3086_rtc_select(pc3086_rtc_chip_select),
+        .pc3086_status1_write_select(pc3086_status1_write_select),
+        .pc3086_status2_write_select(pc3086_status2_write_select)
+    );
+    wire    ppi_chip_select_n       = ~ppi_60_7f_select;
     assign  dma_page_chip_select_n  = chip_select_n[4]; // 0x80 .. 0x8F
     // Tandy 1000 sound. chip_select_n[6] is the 0xC0..0xDF block, which nothing
     // else in this core claims; address[4] narrows it to the 0xC0..0xCF the
@@ -337,7 +380,7 @@ module PERIPHERALS #(
     // other things) can't live there without every index write also toggling
     // Palette Address Source and blanking the display. Moved to 0x340 .. 0x341,
     // matching one of the standard base addresses of a real MM58167 RTC card.
-    wire    rtc_chip_select         = (iorq && ~address_enable_n && address[15:1] == (16'h0340 >> 1)); // 0x340 .. 0x341
+    wire    rtc_chip_select         = (iorq && ~address_enable_n && address[15:1] == (16'h0340 >> 1)) || pc3086_rtc_chip_select; // PCXT 340h/341h, plus PC3086 70h/71h
 
     wire    [3:0] ems_page_address  = (ems_address == 2'b00) ? 4'b1100 : (ems_address == 2'b01) ? 4'b1101 : 4'b1110;
     wire    ems_chip_select         = `ENABLE_EMS ? (iorq && ~address_enable_n && ems_enabled && ({address[15:2], 2'd0} == 16'h0260)) : 1'b0;          // 260h..263h
@@ -507,8 +550,40 @@ module PERIPHERALS #(
     //
     logic   [7:0]   ppi_data_bus_out;
     logic   [7:0]   port_a_in;
+    logic   [7:0]   ppi_port_a_in;
+    logic   [7:0]   ppi_port_c_in;
+`ifdef PC3086_LEGACY_PPI
+    logic   [7:0]   pc3086_status1_write;
+    logic   [7:0]   pc3086_status2_write;
+    wire    [7:0]   pc3086_status1 = 8'h0D | (pc3086_status1_write & 8'h72);
 
-    KF8255 u_KF8255 
+    // PB7 selects Status-1; PB2 selects RAM4 rather than RAM3..0.
+    // PC5 retains the actual PIT channel-2 output from the top level.
+    assign ppi_port_a_in = port_b_out[7] ? pc3086_status1 : port_a_in;
+    assign ppi_port_c_in = {port_c_in[7:4],
+                            port_b_out[2] ? {3'b000, pc3086_status2_write[4]}
+                                          : pc3086_status2_write[3:0]};
+    always_ff @(posedge clock, posedge reset) begin
+        if (reset) begin
+            pc3086_status1_write <= 8'h00;
+            pc3086_status2_write <= 8'h00;
+        end else if (~io_write_n && pc3086_status1_write_select)
+            pc3086_status1_write <= internal_data_bus;
+        else if (~io_write_n && pc3086_status2_write_select)
+            pc3086_status2_write <= internal_data_bus;
+    end
+`else
+    assign ppi_port_a_in = port_a_in;
+    assign ppi_port_c_in = port_c_in;
+`endif
+
+    KF8255 #(
+`ifdef PC3086_LEGACY_PPI
+        .PC3086_RESET_COMPAT(1'b1)
+`else
+        .PC3086_RESET_COMPAT(1'b0)
+`endif
+    ) u_KF8255
     (
         // Bus
         .clock                      (clock),
@@ -521,13 +596,13 @@ module PERIPHERALS #(
         .data_bus_out               (ppi_data_bus_out),
 
         // I/O
-        .port_a_in                  (port_a_in),
+        .port_a_in                  (ppi_port_a_in),
         .port_a_out                 (port_a_out),
         .port_a_io                  (port_a_io),
         .port_b_in                  (port_b_in),
         .port_b_out                 (port_b_out),
         .port_b_io                  (port_b_io),
-        .port_c_in                  (port_c_in),
+        .port_c_in                  (ppi_port_c_in),
         .port_c_out                 (port_c_out),
         .port_c_io                  (port_c_io)
     );
@@ -1900,7 +1975,12 @@ end
         else if ((lpt_chip_select) && (~io_read_n))
         begin
             data_bus_out_from_chipset <= 1'b1;
+`ifdef PC3086_LEGACY_PPI
+            // PC3086 ROS uses reserved status bit 0 as an early boot gate.
+            data_bus_out <= address[0] ? 8'hDE : lpt_reg;
+`else
             data_bus_out <= address[0] ? 8'hDF : lpt_reg;
+`endif
         end
         else if ((lpt_ctrl_select) && (~io_read_n))
         begin

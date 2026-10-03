@@ -7,7 +7,11 @@
 
 `include "KF8255_Definitions.svh"
 
-module KF8255_Port (
+module KF8255_Port #(
+    // Kept separate from the control register so an optional board reset
+    // profile is already visible during reset release.
+    parameter logic RESET_PORT_IO = `PORT_INPUT
+) (
     // Bus
     input   logic           clock,
     input   logic           reset,
@@ -37,7 +41,7 @@ module KF8255_Port (
     //
     always_ff @(posedge clock, posedge reset) begin
         if (reset)
-            port_io <= `PORT_INPUT;
+            port_io <= RESET_PORT_IO;
         else
             casez (mode_select_reg)
                 `KF8255_CONTROL_MODE_0: port_io <= port_io_reg;
@@ -91,4 +95,3 @@ module KF8255_Port (
     assign read = (port_io == `PORT_INPUT) ? read_tmp : port_out;
 
 endmodule
-

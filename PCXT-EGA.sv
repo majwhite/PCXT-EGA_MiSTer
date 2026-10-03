@@ -1147,6 +1147,7 @@ module emu
 
     logic   [7:0]   port_b_out;
     logic   [7:0]   port_c_in;
+    wire    [2:0]   timer_counter_out;
     wire    [1:0]   fdd_present;
     reg     [7:0]   sw;
 
@@ -1162,6 +1163,8 @@ module emu
     assign  sw_floppy = fdd_present[1] ? 2'b01 : 2'b00;
     assign  sw = {sw_floppy, sw_base}; // DIP switches (video adapter and floppy count)
     assign  port_c_in[3:0] = port_b_out[3] ? sw[7:4] : sw[3:0];
+    // PC5 is PIT channel 2 OUT; cassette/parity/channel-check are inactive.
+    assign  port_c_in[7:4] = {2'b00, timer_counter_out[2], 1'b0};
 
 
     wire ems_enabled_sel = `ENABLE_EMS ? eff_ems : 1'b0;
@@ -1246,6 +1249,7 @@ module emu
 		.dma_acknowledge_n                  (dma_acknowledge_n),
 	//  .address_enable_n                   (address_enable_n),
 	//  .terminal_count_n                   (terminal_count_n)
+		.timer_counter_out                  (timer_counter_out),
 		.port_b_out                         (port_b_out),
 		.port_c_in                          (port_c_in),
 		.port_b_in                          (port_b_out),

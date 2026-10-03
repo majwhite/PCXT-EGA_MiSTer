@@ -339,11 +339,25 @@ module KF8253_Counter (
             end
     endfunction
 
+    // Mode 4's count register continues past terminal count.  The output
+    // still emits its one-clock strobe at zero, but a subsequent count read
+    // observes ffffh (or 9999 BCD), not a value saturated at zero.  Keep this
+    // separate from the existing decrement helper: modes that deliberately
+    // hold at terminal count retain their current behaviour.
+    function logic [16:0] decrement_mode_4 (input [16:0] count, input is_bcd);
+        if (count == 17'b0_0000_0000_0000_0000)
+            decrement_mode_4 = (is_bcd == 1'b0) ? 17'h0FFFF : 17'h09999;
+        else
+            decrement_mode_4 = decrement(count, is_bcd);
+    endfunction
+
     // Generate next count value.
     logic   [16:0]  dec_count;
     logic   [16:0]  dec2_count;
+    logic   [16:0]  dec_mode_4_count;
     assign dec_count  = decrement(count, select_bcd);
     assign dec2_count = decrement(dec_count, select_bcd);
+    assign dec_mode_4_count = decrement_mode_4(count, select_bcd);
 
     always_comb begin
         count_next = dec_count;
@@ -395,6 +409,8 @@ module KF8253_Counter (
             end
 
             `KF8253_CONTROL_MODE_4: begin
+                count_next = dec_mode_4_count;
+
                 if (counter_gate == 1'b0)
                     count_next = count;
 
@@ -536,4 +552,3 @@ module KF8253_Counter (
             endcase
     end
 endmodule
-

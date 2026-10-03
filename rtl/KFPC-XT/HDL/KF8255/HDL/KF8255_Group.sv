@@ -7,7 +7,14 @@
 
 `include "KF8255_Definitions.svh"
 
-module KF8255_Group (
+module KF8255_Group #(
+    // Most systems reset an 8255 with every port as an input.  A small
+    // number of PC-compatible BIOSes instead rely on board-provided
+    // power-on direction straps; retain the normal default and let the
+    // enclosing system opt into a different reset direction explicitly.
+    parameter logic RESET_PORT_1_IO = `PORT_INPUT,
+    parameter logic RESET_PORT_2_IO = `PORT_INPUT
+) (
     // Bus
     input   logic           clock,
     input   logic           reset,
@@ -46,7 +53,7 @@ module KF8255_Group (
     //
     always_ff @(posedge clock, posedge reset) begin
         if (reset)
-            port_1_io_reg <= `PORT_INPUT;
+            port_1_io_reg <= RESET_PORT_1_IO;
         else if (write_register)
             port_1_io_reg <= internal_data_bus[1];
         else
@@ -55,7 +62,7 @@ module KF8255_Group (
 
     always_ff @(posedge clock, posedge reset) begin
         if (reset)
-            port_2_io_reg <= `PORT_INPUT;
+            port_2_io_reg <= RESET_PORT_2_IO;
         else if (write_register)
             port_2_io_reg <= internal_data_bus[0];
         else
