@@ -23,6 +23,25 @@
 `define ENABLE_SB 0
 `endif
 
+// Minimal PC3086 mouse compatibility: a stationary device has zero X/Y
+// coordinates. Writes are intentionally ignored; movement is not implemented.
+// Keep the decoder separate so the ROM POST can exercise production logic.
+module PC3086_MOUSE_COORDINATES (
+    input  logic [19:0] address,
+    input  logic        iorq,
+    input  logic        address_enable_n,
+    output logic        selected,
+    output logic [7:0]  read_data
+);
+`ifdef PC3086_LEGACY_PPI
+    assign selected = iorq && ~address_enable_n &&
+                      (address[15:0] == 16'h0078 || address[15:0] == 16'h007A);
+`else
+    assign selected = 1'b0;
+`endif
+    assign read_data = 8'h00;
+endmodule
+
 // PC3086 system ports must not alias the generic 60h..7Fh PPI window.
 // Keep the historical low-byte aliasing for ordinary PCXT builds.
 module PC3086_IO_DECODE (
@@ -370,6 +389,12 @@ module PERIPHERALS #(
     // of io_write_n - by then iorq has already dropped, so including it would
     // gate away every write.
     wire    mpu401_chip_select      = (`ENABLE_MIDI && mpu401_enabled) ? (~address_enable_n && address[15:1] == (16'h0330 >> 1)) : 1'b0; // 0x330 .. 0x331 (MPU-401 UART mode)
+    wire    pc3086_mouse_select;
+    wire    [7:0] pc3086_mouse_data;
+    PC3086_MOUSE_COORDINATES u_pc3086_mouse_coordinates (
+        .address(address), .iorq(iorq), .address_enable_n(address_enable_n),
+        .selected(pc3086_mouse_select), .read_data(pc3086_mouse_data)
+    );
     wire    lpt_chip_select         = (iorq && ~address_enable_n && address[15:1] == (16'h0378 >> 1)); // 0x378 ... 0x379
 	 wire    lpt_ctrl_select         = (iorq && ~address_enable_n && address[15:0] == 16'h037A); // 0x37A
     // The old XTCTL port lived at 8888h. It is retired: see xtegactl.sv for
@@ -557,12 +582,13 @@ module PERIPHERALS #(
     logic   [7:0]   pc3086_status2_write;
     wire    [7:0]   pc3086_status1 = 8'h0D | (pc3086_status1_write & 8'h72);
 
-    // PB7 selects Status-1; PB2 selects RAM4 rather than RAM3..0.
+    // PB7 selects Status-1. The BIOS reads RAM4 with PB2=0 (30h),
+    // then RAM3..0 with PB2=1 (34h).
     // PC5 retains the actual PIT channel-2 output from the top level.
     assign ppi_port_a_in = port_b_out[7] ? pc3086_status1 : port_a_in;
     assign ppi_port_c_in = {port_c_in[7:4],
-                            port_b_out[2] ? {3'b000, pc3086_status2_write[4]}
-                                          : pc3086_status2_write[3:0]};
+                            port_b_out[2] ? pc3086_status2_write[3:0]
+                                          : {3'b000, pc3086_status2_write[4]}};
     always_ff @(posedge clock, posedge reset) begin
         if (reset) begin
             pc3086_status1_write <= 8'h00;
@@ -1976,8 +2002,7 @@ end
         begin
             data_bus_out_from_chipset <= 1'b1;
 `ifdef PC3086_LEGACY_PPI
-            // PC3086 ROS uses reserved status bit 0 as an early boot gate.
-            data_bus_out <= address[0] ? 8'hDE : lpt_reg;
+            data_bus_out <= address[0] ? 8'hDF : lpt_reg;
 `else
             data_bus_out <= address[0] ? 8'hDF : lpt_reg;
 `endif
@@ -2006,6 +2031,11 @@ end
         begin
             data_bus_out_from_chipset <= 1'b1;
             data_bus_out <= fdd_readdata;
+        end
+        else if (pc3086_mouse_select && (~io_read_n))
+        begin
+            data_bus_out_from_chipset <= 1'b1;
+            data_bus_out <= pc3086_mouse_data;
         end
         else if (rtc_chip_select && (~io_read_n))
         begin

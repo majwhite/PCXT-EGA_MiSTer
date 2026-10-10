@@ -1,6 +1,6 @@
 `timescale 1ns/1ps
 
-// End-to-end execution of the PC3086 system-status POST at F000:C277.
+// End-to-end execution of the PC3086 system-status POST at FC00:0277.
 //
 // The ROS first writes four patterns to the Amstrad Status-1 register at 64h
 // and reads them through port 60h with PPI PB7 selecting Status-1.  It then
@@ -37,7 +37,6 @@ module i8088_pc3086_system_status_post_tb;
   reg io_read_data_drive = 1'b0;
   reg [7:0] io_read_data = 8'hFF;
   reg [7:0] port_e9_tag = 8'h00;
-  reg status2_compare_complete = 1'b0;
 
   // Same clock relationships as the default XT configuration.
   always #5 core_clk = ~core_clk;
@@ -65,8 +64,8 @@ module i8088_pc3086_system_status_post_tb;
   wire [7:0] status1 = 8'h0D | (status1_write & 8'h72);
   wire [7:0] port_a_in = port_b_out[7] ? status1 : 8'h00;
   wire [7:0] port_c_in = {2'b00, timer2_out, 1'b0,
-                           port_b_out[2] ? {3'b000, status2_write[4]}
-                                         : status2_write[3:0]};
+                           port_b_out[2] ? status2_write[3:0]
+                                         : {3'b000, status2_write[4]}};
 
   // PC3086 is preprogrammed: Port A input, Port B output, Port C input.
   KF8255 #(.PC3086_RESET_COMPAT(1'b1)) ppi (
@@ -120,10 +119,11 @@ module i8088_pc3086_system_status_post_tb;
     for (i = 0; i < 1048576; i = i + 1) memory[i] = 8'hF4;
     $readmemh("pc3086-system-mirrored.hex", memory, 20'hF0000, 20'hFFFFF);
 
-    // Start precisely at the unmodified ROM status test.
+    // Use the BIOS's actual CS so absolute near continuations and relative
+    // branches stay in the same ROM window as the result markers.
     memory[RESET_VECTOR + 0] = 8'hEA; memory[RESET_VECTOR + 1] = 8'h77;
-    memory[RESET_VECTOR + 2] = 8'hC2; memory[RESET_VECTOR + 3] = 8'h00;
-    memory[RESET_VECTOR + 4] = 8'hF0;
+    memory[RESET_VECTOR + 2] = 8'h02; memory[RESET_VECTOR + 3] = 8'h00;
+    memory[RESET_VECTOR + 4] = 8'hFC;
 
     // Successful Status-2 iterations continue into the next POST stage at
     // C320.  Replace that stage with a marker.  D9FE is the shared error
@@ -135,7 +135,7 @@ module i8088_pc3086_system_status_post_tb;
     memory[20'hFDA00] = 8'hE6; memory[20'hFDA01] = 8'hE9;
     memory[20'hFDA02] = 8'hF4;
 
-    $display("PC3086 system-status integration: F000:C277, production 8088/PPI/PIT");
+    $display("PC3086 system-status integration: FC00:0277, production 8088/PPI/PIT");
     repeat (20) @(posedge core_clk);
     reset = 1'b0;
     repeat (4) @(posedge core_clk);
@@ -165,19 +165,6 @@ module i8088_pc3086_system_status_post_tb;
             if (ppi_selected)
               $display("PPI RD %02h=%02h (Aio=%b Ain=%02h Bout=%02h)", ad_out[7:0],
                        io_read_data, port_a_io, port_a_in, port_b_out);
-            if (ppi_selected && bus_address[1:0] == 2'b10 &&
-                status2_write == 8'hFF && port_b_out == 8'h34 &&
-                io_read_data == 8'h01)
-              status2_compare_complete = 1'b1;
-            // The following Port-A read is reached only after the ROM's
-            // Status-1 and both Status-2 comparisons have branched through
-            // their success paths.  The separate direct fixture covers the
-            // subsequent PC5/PIT terminal-count check.
-            if (ppi_selected && bus_address[1:0] == 2'b00 &&
-                status2_compare_complete) begin
-              $display("PASS: PC3086 ROM Status-1/Status-2 POST completed after %0d core cycles", cycle_count);
-              $finish_and_return(0);
-            end
           end
         end else begin
           if (s2_s0_out != 3'b111) bus_address = ad_out;

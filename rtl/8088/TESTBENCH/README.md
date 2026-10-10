@@ -25,11 +25,24 @@ mirrored system ROM from the source checkout or build-tools repository; set
 | --- | --- |
 | `test-i8088-bda-tail.sh` | Four fixtures: minimal tail increment, exact ROM handler bytes, external IRQ1/IRET, and full-ROM scan-code translation; requires ordered tail/queue writes |
 | `test-i8088-pc3086-pit-post.sh` | Real ROM timer POST against the production PIT |
-| `test-i8088-pc3086-system-status.sh` | Real ROM Status-1/Status-2 POST against the PPI/PIT |
+| `test-i8088-pc3086-system-status.sh` | Real ROM at FC00:0277: all Status-1/Status-2 patterns and final PIT OUT2 check |
 | `test-i8088-pc3086-postkey-boot.sh` | Foreground key return proceeds through INT 16h / INT 10h to INT 19h |
 | `test-i8088-pc3086-fdc-irq.sh` | Production FDC interrupt reaches the ROM's IRQ6 handler and releases its wait loop |
 | `test-i8088-pc3086-int13-read.sh` | Consecutive sector-1 and sector-8 reads each transfer 512 bytes and return AH=00 |
 | `test-pc3086-bus-ram.sh` | Replays first-key stores through the real clock generator, motherboard latch, 8288, bus arbiter, RAM and SDRAM controller at all four clock selections |
+
+The new mouse-coordinate regression has a standalone runner in this checkout
+and requires the rewritten `.sv` CPU:
+
+```bash
+PC3086_ROM=/path/to/pc3086-system-mirrored.rom \
+  bash rtl/8088/TESTBENCH/run_mouse_post.sh
+```
+
+It runs normal/PC3086 decoder qualification checks and the actual ROM POST at
+FC00:0483 against the production stationary-mouse decoder. Output is staged
+under this checkout's `.test-output/pc3086-mouse-post/`. This checks zero
+coordinates only, not Amstrad mouse movement support.
 
 The bus/RAM fixture substitutes only an idle DMA controller. Passive probes in
 the testbench count RAM acceptance and SDRAM issue independently, use baselines
