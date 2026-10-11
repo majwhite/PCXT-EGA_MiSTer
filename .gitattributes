@@ -7,3 +7,7 @@
 # .COM that gets line-ending conversion applied to it is corrupt in a way that
 # only shows up when it is run on hardware, so say it explicitly.
 *.com binary
+
+# BIOS/option ROM images must never undergo line-ending conversion.
+*.rom binary
+*.bin binary

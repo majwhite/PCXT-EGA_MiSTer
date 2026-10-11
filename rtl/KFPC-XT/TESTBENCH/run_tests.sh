@@ -10,6 +10,9 @@
 # Its sibling in rtl/video covers the EGA path. This one covers the chipset and
 # the peripherals under it, including the vendored KFPC-XT cores in HDL/*/.
 #
+# xtide_ata_tb uses Verilator (--binary --timing) because Icarus 13 rejects
+# forward references in the unchanged vendored IDE/HPS sources.
+#
 # Two kinds of bench live here and they are not equally strong:
 #
 #   The PCXT-written ones check themselves and print PASS or FAIL. A pass means
@@ -60,6 +63,7 @@ declare -A SOURCES=(
     [ega_bios_loaded_latch_tb]="HDL/ega_bios_loaded_latch.sv HDL/rom_presence_latch.sv"
     [ram_refresh_collision_tb]="HDL/RAM.sv HDL/KFSDRAM/HDL/KFSDRAM.sv"
     [ram_lookahead_tb]="HDL/RAM.sv HDL/KFSDRAM/HDL/KFSDRAM.sv"
+    [xtide_ata_tb]="HDL/XT2IDE.sv ../common/ide.v ../hps_ext.v"
     [Ready_tb]="HDL/Ready.sv"
     [Bus_Arbiter_Hold_tb]="HDL/Bus_Arbiter.sv"
     [KF8253_tb]="HDL/KF8253/HDL/KF8253.sv HDL/KF8253/HDL/KF8253_Counter.sv HDL/KF8253/HDL/KF8253_Control_Logic.sv"
@@ -104,9 +108,15 @@ for stem in $(printf '%s\n' "${!SOURCES[@]}" | sort); do
 
     # Built without -DIVERILOG unless -w is given: the vendored benches guard
     # their $dumpfile with it, and a VCD per run is noise in a batch.
-    $NICE iverilog -g2012 $WAVE $INCLUDES -o "$BUILD_DIR/$stem.vvp" \
-        "$tb" ${SOURCES[$stem]} > "$log" 2>&1 \
-        && (cd "$BUILD_DIR" && $NICE timeout 300 vvp "$BUILD_DIR/$stem.vvp") >> "$log" 2>&1
+    if [ "$stem" = xtide_ata_tb ]; then
+        $NICE verilator --binary --timing --top-module "$stem" -Wno-fatal \
+            --Mdir "$BUILD_DIR/$stem-obj" "$tb" ${SOURCES[$stem]} > "$log" 2>&1 \
+            && $NICE timeout 300 "$BUILD_DIR/$stem-obj/V$stem" >> "$log" 2>&1
+    else
+        $NICE iverilog -g2012 $WAVE $INCLUDES -o "$BUILD_DIR/$stem.vvp" \
+            "$tb" ${SOURCES[$stem]} > "$log" 2>&1 \
+            && (cd "$BUILD_DIR" && $NICE timeout 300 vvp "$BUILD_DIR/$stem.vvp") >> "$log" 2>&1
+    fi
     rc=$?
 
     elapsed=$(( $(date +%s) - start ))
