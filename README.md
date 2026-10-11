@@ -363,10 +363,22 @@ example, or running EGA-only software with nothing else in the picture.
   * Model: IBM PCXT.
   * CPU Speed: pick a speed.
   * System & BIOS → CPU Type: choose 8088 (compatible default) or 8086.
-  * FDD & HDD → HDD Image: FreeDOS_HD.img
-  * System & BIOS → PCXT BIOS: choose a compatible system BIOS, such as `bios-micro8088-xtide.rom` from `SW/8088_bios/binaries/`.
+  * FDD & HDD → IDE 0-0: `FreeDOS_HD.img` (leave IDE 0-1 empty and disable 2nd SD card for the initial test).
+  * System & BIOS → PCXT BIOS: choose `pcxt_pcxt31.rom` from `SW/ROMs/`, which has confirmed working keyboard input and already embeds XTIDE rev-1 at 300h.
+  * System & BIOS → EC00 BIOS: leave empty when the system BIOS already embeds XTIDE.
   * System & BIOS → EGA BIOS: `ega_bios.rom`. **Required.**
 * Choose Reset & apply settings.
+
+The core's IDE controller uses **XTIDE revision-1 mapping at 300h–30Fh**.
+All bundled XTIDE-bearing ROMs in `SW/8088_bios/binaries/` now use that
+configuration. Older copies used `320h` and/or XT-CF-Lite mapping; changing
+only the port to `300h` still leaves the wrong controller type. Replace the
+ROM on the SD card with the updated copy. XTIDE should display `Master at
+300h`. Use `pcxt_pcxt31.rom` as the recommended system BIOS: the updated
+Micro8088 ROM boots FreeDOS but has a separate keyboard compatibility issue.
+The other 8088 BIOS variants have not been hardware-validated. See
+[XTIDE configuration and validation](docs/xtide-hdd-boot.md) for rebuilding
+and regression checks.
 
 The 8086 mode uses a six-byte prefetch queue and transfers aligned SDRAM words
 over its private 16-bit path. Odd words and the XT-class video and peripheral

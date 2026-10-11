@@ -8,6 +8,18 @@ and [Xi 8088] systems
 [NuXT-git]: https://github.com/monotech/NuXT
 [Xi 8088]: http://www.malinov.com/Home/sergeys-projects/xi-8088
 
+## MiSTer configuration in this fork
+
+Use this repository's `binaries/` files rather than the upstream image links
+below. All XTIDE-bearing builds are configured for **XTIDE revision 1 at
+300h**, matching `XT2IDE.sv` with `high_speed=0`. XT-CF-Lite at 300h is not
+compatible: it doubles register offsets and uses a different data-transfer
+protocol. The original XT-CF binaries are retained as inputs; run
+`python3 xtide_r625/configure_mister.py` to reproduce the configured rev-1
+payloads. Run `python3 verify_xtide_roms.py` to verify the prebuilt images.
+See [the HDD investigation](../../docs/xtide-hdd-boot.md) for details and
+hardware validation status.
+
 ## BIOS Images
 
 |File name                                                                                                       | Description                                                       |
