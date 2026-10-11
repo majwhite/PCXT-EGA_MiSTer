@@ -55,6 +55,7 @@ set_global_assignment -name SYSTEMVERILOG_FILE "rtl/KFPC-XT/HDL/KFMMC/HDL/LDST_S
 set_global_assignment -name SYSTEMVERILOG_FILE "rtl/KFPC-XT/HDL/KFMMC/HDL/KFMMC_SPI.sv"
 set_global_assignment -name SYSTEMVERILOG_FILE "rtl/KFPC-XT/HDL/KFMMC/HDL/KFMMC_SPI2IDE_ROM.v"
 set_global_assignment -name SYSTEMVERILOG_FILE "rtl/KFPC-XT/HDL/KFMMC/HDL/KFMMC_DRIVE_SPI2IDE.sv"
+set_global_assignment -name SYSTEMVERILOG_FILE "rtl/KFPC-XT/HDL/pc3086_host_rtc.sv"
 set_global_assignment -name VERILOG_FILE "rtl/KFPC-XT/HDL/rtc.v"
 set_global_assignment -name SYSTEMVERILOG_FILE "rtl/KFPC-XT/HDL/Peripherals.sv"
 set_global_assignment -name SYSTEMVERILOG_FILE "rtl/KFPC-XT/HDL/Chipset.sv"

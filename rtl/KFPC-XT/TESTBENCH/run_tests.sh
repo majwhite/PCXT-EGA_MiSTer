@@ -51,6 +51,7 @@ mkdir -p "$BUILD_DIR"
 # Each bench names the sources it needs. The vendored peripherals carry package
 # headers their own directory has to be on the include path for.
 declare -A SOURCES=(
+    [pc3086_host_rtc_tb]="HDL/pc3086_host_rtc.sv HDL/rtc.v ../common/simple_ram.v"
     [bios_hold_notice_tb]="HDL/bios_hold_notice.sv"
     [reset_pending_notice_tb]="HDL/reset_pending_notice.sv"
     [keyboard_warm_reset_tb]="HDL/keyboard_warm_reset.sv"
@@ -104,22 +105,32 @@ for stem in $(printf '%s\n' "${!SOURCES[@]}" | sort); do
 
     # Built without -DIVERILOG unless -w is given: the vendored benches guard
     # their $dumpfile with it, and a VCD per run is noise in a batch.
-    $NICE iverilog -g2012 $WAVE $INCLUDES -o "$BUILD_DIR/$stem.vvp" \
-        "$tb" ${SOURCES[$stem]} > "$log" 2>&1 \
-        && (cd "$BUILD_DIR" && $NICE timeout 300 vvp "$BUILD_DIR/$stem.vvp") >> "$log" 2>&1
-    rc=$?
+    # rtc.v has forward references in declaration assignments which Icarus
+    # rejects. Use Verilator for the loader/RTC integration bench.
+    if [[ "$stem" == pc3086_host_rtc_tb ]]; then
+        $NICE verilator --binary --timing -Wno-fatal -j 2 \
+            --top-module "$stem" --Mdir "$BUILD_DIR/$stem-obj" \
+            "$tb" ${SOURCES[$stem]} > "$log" 2>&1 \
+            && $NICE timeout 300 "$BUILD_DIR/$stem-obj/V$stem" >> "$log" 2>&1
+        rc=$?
+    else
+        $NICE iverilog -g2012 $WAVE $INCLUDES -o "$BUILD_DIR/$stem.vvp" \
+            "$tb" ${SOURCES[$stem]} > "$log" 2>&1 \
+            && (cd "$BUILD_DIR" && $NICE timeout 300 vvp "$BUILD_DIR/$stem.vvp") >> "$log" 2>&1
+        rc=$?
+    fi
 
     elapsed=$(( $(date +%s) - start ))
 
     # A bench that stops with $fatal exits non-zero and may print neither
     # RESULT nor PASS, so match its ERROR/FATAL lines too - otherwise a real
     # regression is filed as a toolchain problem and quietly ignored.
-    if [ $rc -ne 0 ] && ! grep -qE 'RESULT|PASS|FAIL|^ERROR|^FATAL' "$log"; then
+    if [ $rc -ne 0 ] && ! grep -qE 'RESULT|PASS|FAIL|^ERROR|^FATAL|%Fatal|%Error.*Verilog \$stop' "$log"; then
         printf '  %-34s BUILD FAIL  (%ss)  %s\n' "$stem" "$elapsed" "$log"
         skip=$((skip+1))
-    elif grep -qE 'RESULT: FAIL|TIMEOUT|^FAIL|^ERROR|^FATAL|[1-9][0-9]* failed' "$log"; then
+    elif grep -qE 'RESULT: FAIL|TIMEOUT|^FAIL|^ERROR|^FATAL|%Fatal|%Error.*Verilog \$stop|[1-9][0-9]* failed' "$log"; then
         printf '  %-34s FAIL        (%ss)\n' "$stem" "$elapsed"
-        grep -E '^FAIL|TIMEOUT|RESULT: FAIL|^ERROR|^FATAL' "$log" | sed 's/^/      /'
+        grep -E '^FAIL|TIMEOUT|RESULT: FAIL|^ERROR|^FATAL|%Fatal' "$log" | sed 's/^/      /'
         fail=$((fail+1))
     else
         printf '  %-34s pass        (%ss)\n' "$stem" "$elapsed"

@@ -404,6 +404,7 @@ module emu
     // assumes that for cores literally named PCXT, Tandy1000 or PCjr, so
     // without it plain F12 opened the OSD here and pause/credits was
     // unreachable.
+    wire [64:0] hps_rtc;
     hps_io #(.CONF_STR(CONF_STR), .PS2DIV(2000), .PS2WE(1), .WIDE(1), .F12KEYMOD(1)) hps_io 
 	(
 		.clk_sys(clk_chipset),
@@ -421,6 +422,7 @@ module emu
 		.new_vmode(ega_vmode_toggle),
 
 		.uart_mode(uart_mode),
+        .RTC(hps_rtc),
 
 		.ps2_key(ps2_key),
 		.ps2_kbd_clk_in		(ps2_kbd_clk_out),
@@ -453,6 +455,26 @@ module emu
     wire [15:0] mgmt_addr;
     wire        mgmt_rd;
     wire        mgmt_wr;
+    wire [15:0] chipset_mgmt_addr, chipset_mgmt_dout;
+    wire chipset_mgmt_wr, chipset_mgmt_rd;
+    wire rtc_init_done;
+`ifdef PC3086_LEGACY_RTC
+    pc3086_host_rtc rtc_startup (
+        .clk(clk_chipset),
+        .host_rtc(hps_rtc),
+        .hps_address(mgmt_addr), .hps_writedata(mgmt_dout),
+        .hps_write(mgmt_wr), .hps_read(mgmt_rd),
+        .mgmt_address(chipset_mgmt_addr), .mgmt_writedata(chipset_mgmt_dout),
+        .mgmt_write(chipset_mgmt_wr), .mgmt_read(chipset_mgmt_rd),
+        .done(rtc_init_done)
+    );
+`else
+    assign chipset_mgmt_addr = mgmt_addr;
+    assign chipset_mgmt_dout = mgmt_dout;
+    assign chipset_mgmt_wr = mgmt_wr;
+    assign chipset_mgmt_rd = mgmt_rd;
+    assign rtc_init_done = 1'b1;
+`endif
     wire  [7:0] mgmt_req;
     assign mgmt_req[5:3] = 3'b000;
 
@@ -526,7 +548,7 @@ module emu
         .clk_video(clk_card_video)
     );
 
-    wire reset_wire = RESET | status[0] | buttons[1] | !pll_locked | !pll_system_locked  | splashscreen | splash_pending;
+    wire reset_wire = RESET | status[0] | buttons[1] | !pll_locked | !pll_system_locked  | splashscreen | splash_pending | !rtc_init_done;
     wire video_retime_reset = RESET | status[0] | buttons[1] | !pll_locked | !pll_system_locked | splash_pending;
     (* ASYNC_REG = "TRUE" *) logic [1:0] video_retime_reset_sync = 2'b11;
     wire video_retime_reset_local = video_retime_reset_sync[1];
@@ -1315,10 +1337,10 @@ module emu
 		.spi_mosi                           (spi_mosi),
 		.spi_miso                           (spi_miso),
 		.mgmt_readdata                      (mgmt_din),
-		.mgmt_writedata                     (mgmt_dout),
-		.mgmt_address                       (mgmt_addr),
-		.mgmt_write                         (mgmt_wr),
-		.mgmt_read                          (mgmt_rd),
+		.mgmt_writedata                     (chipset_mgmt_dout),
+		.mgmt_address                       (chipset_mgmt_addr),
+		.mgmt_write                         (chipset_mgmt_wr),
+		.mgmt_read                          (chipset_mgmt_rd),
 		.floppy_wp                          (status[20:19]),
 		.fdd_present                        (fdd_present),
 		.fdd_request                        (mgmt_req[7:6]),
